@@ -1,0 +1,23 @@
+# ====== NODE / EXPRESS ======
+node_modules/
+.env
+.env.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ====== BUILDS / TEMP ======
+dist/
+build/
+coverage/
+.DS_Store
+Thumbs.db
+
+# ====== SYSTEM FILES ======
+.vscode/
+.idea/
+*.iml
+
+# ====== LOGS ======
+logs/
+*.log
