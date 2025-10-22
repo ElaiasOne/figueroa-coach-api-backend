@@ -1,3 +1,5 @@
+//   backend_figueroa_coach/src/controllers/auth.controller.js
+
 import { pool } from '../config/db.js';
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken';
@@ -165,3 +167,70 @@ export const actualizarAlumno = async (req, res) => {
     return res.status(500).json({ message: 'Error', error: e.message });
   }
 };
+
+// ACTUALIZAR contraseña del alumno (solo ENTRENADOR)
+export const actualizarPasswordAlumno = async (req, res) => {
+  const { id } = req.params
+  const { password } = req.body
+
+  try {
+    if (!password || String(password).length < 6) {
+      return res.status(400).json({ message: 'La contraseña debe tener al menos 6 caracteres' })
+    }
+
+    const [rows] = await pool.query(`SELECT id, rol FROM users WHERE id = ?`, [id])
+    if (rows.length === 0) return res.status(404).json({ message: 'No encontrado' })
+    if (rows[0].rol !== 'ALUMNO') return res.status(400).json({ message: 'Solo ALUMNO' })
+
+    const hash = await bcrypt.hash(password, 10)
+    await pool.query(`UPDATE users SET password_hash = ? WHERE id = ? AND rol = 'ALUMNO'`, [hash, id])
+
+    return res.json({ message: 'Contraseña actualizada' })
+  } catch (e) {
+    return res.status(500).json({ message: 'Error', error: e.message })
+  }
+}
+
+// ELIMINAR alumno (solo entrenador) – borra planificaciones y dependencias (versión robusta)
+export const eliminarAlumno = async (req, res) => {
+  const { id } = req.params
+  let conn
+  try {
+    conn = await pool.getConnection()
+    await conn.beginTransaction()
+
+    // validar que exista y sea ALUMNO
+    const [urows] = await conn.query(`SELECT id, rol FROM users WHERE id = ?`, [id])
+    if (urows.length === 0) { await conn.rollback(); conn.release(); return res.status(404).json({ message: 'No encontrado' }) }
+    if (urows[0].rol !== 'ALUMNO') { await conn.rollback(); conn.release(); return res.status(400).json({ message: 'Solo ALUMNO' }) }
+
+    // 1) Borrar dependencias con subselects (evita armar listas y problemas de placeholders)
+    //    Si no hay planificaciones, estos DELETE no hacen nada (0 rows)
+    await conn.query(`
+      DELETE FROM suplementaciones
+      WHERE planificacion_id IN (SELECT id FROM planificaciones WHERE user_id = ?)`, [id])
+
+    await conn.query(`
+      DELETE FROM alimentaciones
+      WHERE planificacion_id IN (SELECT id FROM planificaciones WHERE user_id = ?)`, [id])
+
+    await conn.query(`
+      DELETE FROM rutinas
+      WHERE planificacion_id IN (SELECT id FROM planificaciones WHERE user_id = ?)`, [id])
+
+    // 2) Borrar planificaciones del alumno
+    await conn.query(`DELETE FROM planificaciones WHERE user_id = ?`, [id])
+
+    // 3) Borrar usuario (alumno)
+    const [r] = await conn.query(`DELETE FROM users WHERE id = ? AND rol = 'ALUMNO'`, [id])
+    if (r.affectedRows === 0) { await conn.rollback(); conn.release(); return res.status(404).json({ message: 'No encontrado' }) }
+
+    await conn.commit()
+    conn.release()
+    return res.json({ message: 'Alumno eliminado' })
+  } catch (e) {
+    if (conn) { try { await conn.rollback(); conn.release() } catch (_) {} }
+    // devolvemos el error SQL para verlo en el alert del front
+    return res.status(500).json({ message: 'Error al eliminar alumno', error: e.message })
+  }
+}

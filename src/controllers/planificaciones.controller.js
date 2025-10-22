@@ -1,3 +1,5 @@
+//   backend_figueroa_coach/src/controllers/planificaciones.controller.js
+
 import { pool } from '../config/db.js';
 
 // ===================== PLANIFICACIONES =====================

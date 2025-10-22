@@ -1,3 +1,5 @@
+//   backend_figueroa_coach/src/routes/planificaciones.routes.js
+
 import { Router } from 'express'
 import { authRequired, onlyTrainer } from '../middlewares/auth.js'
 import {
