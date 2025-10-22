@@ -22,8 +22,9 @@ export const listarPlanificaciones = async (req, res) => {
   const { user_id } = req.query
   try {
     let sql = `SELECT p.*, u.nombre AS alumno_nombre
-               FROM planificaciones p
-               JOIN users u ON u.id = p.user_id`
+  FROM planificaciones p
+  LEFT JOIN users u ON u.id = p.user_id
+  ORDER BY p.id DESC`
     const params = []
     if (req.user.rol === 'ALUMNO') {
       sql += ' WHERE p.user_id = ?'
